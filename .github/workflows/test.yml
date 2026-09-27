@@ -13,7 +13,11 @@ permissions:
 
 jobs:
   test:
+    name: Test (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22, 24]
 
     steps:
       - name: Checkout repository
@@ -22,9 +26,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '24'
+          node-version: ${{ matrix.node-version }}
 
       - name: Run npm audit
+        if: matrix.node-version == 24
         run: |
           npm i --package-lock-only
           npm audit --audit-level=high
@@ -34,17 +39,19 @@ jobs:
         run: npm ci
 
       - name: Run lint
+        if: matrix.node-version == 24
         run: npm run lint
 
       - name: Run tests
         run: node --test --test-concurrency=1
 
       - name: Run test coverage
+        if: matrix.node-version == 24
         run: npm run test:coverage 2>&1 | tee coverage-output.txt
         continue-on-error: true
 
       - name: Upload coverage report
-        if: always()
+        if: ${{ always() && matrix.node-version == 24 }}
         uses: actions/upload-artifact@v7
         with:
           name: coverage-report
@@ -52,7 +59,7 @@ jobs:
           retention-days: 7
 
       - name: Coverage summary
-        if: always()
+        if: ${{ always() && matrix.node-version == 24 }}
         run: |
           echo "## Test Coverage" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
