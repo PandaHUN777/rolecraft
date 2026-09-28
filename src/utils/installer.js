@@ -17,6 +17,7 @@ import {
   getProjectLockPath,
   computeFileHashes,
   normalizeSlug,
+  readLock,
 } from './lockfile.js'
 import { getAgentByFlag } from '../agents.js'
 
@@ -142,8 +143,37 @@ export async function removeLatestBackup(slug) {
   await rm(backups[0].path, { force: true }).catch(() => {})
 }
 
+async function assertNoSlugCollision(slug, targets) {
+  const normalizedSlug = normalizeSlug(slug)
+  const lockPaths = new Set(
+    targets.map((target) =>
+      target === 'project'
+        ? getProjectLockPath(process.cwd())
+        : getGlobalLockPath(),
+    ),
+  )
+
+  for (const lockPath of lockPaths) {
+    const lock = await readLock(lockPath)
+    const existingSlug = Object.keys(lock.skills || {}).find(
+      (entry) => entry !== slug && normalizeSlug(entry) === normalizedSlug,
+    )
+
+    if (existingSlug) {
+      throw new UserError(
+        `Cannot install "${slug}": it conflicts with existing slug "${existingSlug}" because both map to the same install directory.`,
+        {
+          suggestion: 'Remove the existing skill before installing this slug.',
+          code: 'SLUG_COLLISION',
+        },
+      )
+    }
+  }
+}
+
 export async function installSkill(resolved, targets, mode = 'copy') {
   const slug = resolved.slug
+  await assertNoSlugCollision(slug, targets)
 
   const agentNames = targets.map((target) => {
     const agent = getAgentByFlag(target)
