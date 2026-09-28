@@ -143,13 +143,11 @@ export async function removeLatestBackup(slug) {
   await rm(backups[0].path, { force: true }).catch(() => {})
 }
 
-async function assertNoSlugCollision(slug, targets) {
+async function assertNoSlugCollision(slug, targets, cwd = process.cwd()) {
   const normalizedSlug = normalizeSlug(slug)
   const lockPaths = new Set(
     targets.map((target) =>
-      target === 'project'
-        ? getProjectLockPath(process.cwd())
-        : getGlobalLockPath(),
+      target === 'project' ? getProjectLockPath(cwd) : getGlobalLockPath(),
     ),
   )
 
@@ -171,9 +169,14 @@ async function assertNoSlugCollision(slug, targets) {
   }
 }
 
-export async function installSkill(resolved, targets, mode = 'copy') {
+export async function installSkill(
+  resolved,
+  targets,
+  mode = 'copy',
+  cwd = process.cwd(),
+) {
   const slug = resolved.slug
-  await assertNoSlugCollision(slug, targets)
+  await assertNoSlugCollision(slug, targets, cwd)
 
   const agentNames = targets.map((target) => {
     const agent = getAgentByFlag(target)
@@ -190,7 +193,7 @@ export async function installSkill(resolved, targets, mode = 'copy') {
     let label
 
     if (target === 'project') {
-      baseDir = join(process.cwd(), '.agents', 'skills')
+      baseDir = join(cwd, '.agents', 'skills')
 
       label = './.agents/skills/'
     } else {
@@ -281,9 +284,7 @@ export async function installSkill(resolved, targets, mode = 'copy') {
     }
 
     const lockPath =
-      target === 'project'
-        ? getProjectLockPath(process.cwd())
-        : getGlobalLockPath()
+      target === 'project' ? getProjectLockPath(cwd) : getGlobalLockPath()
 
     await addSkillToLock(
       slug,
