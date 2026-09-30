@@ -1,6 +1,6 @@
 import { describe, it, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, realpathSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -25,7 +25,10 @@ describe('initApi', () => {
     const result = await initApi()
 
     assert.deepEqual(result, {
-      path: join(tempDir, 'my-skill', 'SKILL.md'),
+      // initApi joins onto process.cwd(), which resolves symlinks. On macOS
+      // mkdtempSync hands back /var/... while cwd reports /private/var/...,
+      // so comparing against tempDir directly fails on that platform only.
+      path: realpathSync(join(tempDir, 'my-skill', 'SKILL.md')),
       slug: 'my-skill',
       name: 'my-skill',
       owner: 'local',

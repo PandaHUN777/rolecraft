@@ -107,4 +107,24 @@ describe('apiUse', () => {
       ['team/beta'],
     )
   })
+
+  // The slug case above only reaches the slug half of the filter. Without these
+  // two, deleting the `s.name` comparison in use.js leaves every test green.
+  it('matches a skill by display name, ignoring case', async () => {
+    const result = await apiUse(sourceDir, { skill: ['alpha'] })
+
+    assert.deepEqual(
+      result.skills.map((skill) => skill.slug),
+      ['team/alpha'],
+    )
+  })
+
+  it('matches a lower-case slug against its mixed-case form', async () => {
+    const result = await apiUse(sourceDir, { skill: ['Team/Beta'] })
+
+    assert.deepEqual(
+      result.skills.map((skill) => skill.slug),
+      ['team/beta'],
+    )
+  })
 })
