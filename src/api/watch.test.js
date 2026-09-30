@@ -227,6 +227,46 @@ describe('watchApi', () => {
     assert.equal(synced.startedAt, syncing.startedAt)
   })
 
+  it('does not resync when sync output is inside the watched source', async () => {
+    const dir = mkdtempSync(
+      join(tmpdir(), 'rolecraft-watch-api-nested-target-'),
+    )
+    const savedCwd = process.cwd
+    process.env.HOME = dir
+    process.cwd = () => dir
+
+    try {
+      writeSkill(dir, 'nested-skill')
+      await writeLockFile(dir, {
+        'nested-skill': { ...localEntry(dir), agents: ['eve'] },
+      })
+      const targetDir = join(dir, 'agent', 'skills', 'nested-skill')
+      mkdirSync(targetDir, { recursive: true })
+      writeFileSync(join(targetDir, 'SKILL.md'), 'previous installation')
+      const events = []
+      const result = await watchModule.watchApi('nested-skill', dir, {
+        onEvent: (e) => events.push(e),
+      })
+
+      try {
+        await writeFile(join(dir, 'CHANGE.md'), 'external change')
+        await waitFor(events, (e) => e.type === 'synced')
+        await new Promise((r) => setTimeout(r, 800))
+      } finally {
+        result.close()
+      }
+
+      assert.equal(events.filter((e) => e.type === 'syncing').length, 1)
+      const synced = events.find((e) => e.type === 'synced')
+      assert.equal(synced?.ok, true)
+      assert.equal(events.filter((e) => e.type === 'synced').length, 1)
+    } finally {
+      process.cwd = savedCwd
+      process.env.HOME = tempDir
+      await rmRetry(dir)
+    }
+  })
+
   it('emits synced with ok=false when reinstall fails', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'rolecraft-watch-api-fail-'))
     process.env.HOME = dir
