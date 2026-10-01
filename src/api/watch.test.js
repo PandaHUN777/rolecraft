@@ -267,6 +267,64 @@ describe('watchApi', () => {
     }
   })
 
+  it('does not resync when sync output is inside watched source and cwd differs from process.cwd()', async () => {
+    const projectDir = mkdtempSync(
+      join(tmpdir(), 'rolecraft-watch-api-diff-cwd-project-'),
+    )
+    const processDir = mkdtempSync(
+      join(tmpdir(), 'rolecraft-watch-api-diff-cwd-process-'),
+    )
+    const savedCwd = process.cwd
+    process.cwd = () => processDir
+
+    try {
+      writeSkill(projectDir, 'project-nested-skill')
+      await writeLockFile(projectDir, {
+        'project-nested-skill': {
+          name: 'Project Nested Skill',
+          source: projectDir,
+          sourceType: 'local',
+          installedAt: new Date().toISOString(),
+          agents: [],
+        },
+      })
+      const targetDir = join(
+        projectDir,
+        '.agents',
+        'skills',
+        'project-nested-skill',
+      )
+      mkdirSync(targetDir, { recursive: true })
+      writeFileSync(join(targetDir, 'SKILL.md'), 'previous installation')
+
+      const events = []
+      const result = await watchModule.watchApi(
+        'project-nested-skill',
+        projectDir,
+        {
+          onEvent: (e) => events.push(e),
+        },
+      )
+
+      try {
+        await writeFile(join(projectDir, 'CHANGE.md'), 'external change')
+        await waitFor(events, (e) => e.type === 'synced')
+        await new Promise((r) => setTimeout(r, 800))
+      } finally {
+        result.close()
+      }
+
+      assert.equal(events.filter((e) => e.type === 'syncing').length, 1)
+      const synced = events.find((e) => e.type === 'synced')
+      assert.equal(synced?.ok, true)
+      assert.equal(events.filter((e) => e.type === 'synced').length, 1)
+    } finally {
+      process.cwd = savedCwd
+      await rmRetry(projectDir)
+      await rmRetry(processDir)
+    }
+  })
+
   it('emits synced with ok=false when reinstall fails', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'rolecraft-watch-api-fail-'))
     process.env.HOME = dir
