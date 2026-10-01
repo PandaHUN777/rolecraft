@@ -20,11 +20,10 @@ function installTargetsFor(entry) {
   return targets
 }
 
-function outputDirsFor(targets) {
+function outputDirsFor(targets, cwd) {
   return targets
     .map((target) => {
-      if (target === 'project')
-        return resolve(process.cwd(), '.agents', 'skills')
+      if (target === 'project') return resolve(cwd, '.agents', 'skills')
       return agents.find((agent) => agent.flag === target)?.getDir?.()
     })
     .filter(Boolean)
@@ -40,13 +39,13 @@ function isSameOrChildPath(parentPath, candidatePath) {
   )
 }
 
-async function reinstallSkill(slug, skills, _cwd) {
+async function reinstallSkill(slug, skills, cwd) {
   const entry = skills[slug]
   if (entry?.sourceType !== 'local') return false
 
   try {
     const resolved = await resolveSource(entry.source)
-    await installSkill(resolved, installTargetsFor(entry))
+    await installSkill(resolved, installTargetsFor(entry), 'copy', cwd)
     return true
   } catch {
     return false
@@ -131,7 +130,7 @@ export async function watchApi(slug, cwd = process.cwd(), options = {}) {
     }
 
     const sourcePath = expandTilde(entry.source)
-    const ignoredOutputDirs = outputDirsFor(installTargetsFor(entry)).filter(
+    const ignoredOutputDirs = outputDirsFor(installTargetsFor(entry), cwd).filter(
       (targetPath) => isSameOrChildPath(sourcePath, targetPath),
     )
 
