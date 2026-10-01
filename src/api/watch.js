@@ -130,9 +130,10 @@ export async function watchApi(slug, cwd = process.cwd(), options = {}) {
     }
 
     const sourcePath = expandTilde(entry.source)
-    const ignoredOutputDirs = outputDirsFor(installTargetsFor(entry), cwd).filter(
-      (targetPath) => isSameOrChildPath(sourcePath, targetPath),
-    )
+    const ignoredOutputDirs = outputDirsFor(
+      installTargetsFor(entry),
+      cwd,
+    ).filter((targetPath) => isSameOrChildPath(sourcePath, targetPath))
 
     const handler = (_eventType, filename) => {
       if (!filename || filename.startsWith('.')) return
