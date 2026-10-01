@@ -268,4 +268,25 @@ describe('api ci', () => {
       setSpawnSync(spawnSync)
     }
   })
+
+  it('installs project skills under the requested cwd even when process.cwd() differs', async () => {
+    const source = await writeLocalSkill('cwd-mismatch-skill')
+    await writeProjectLock(workDir, {
+      'cwd-mismatch-skill': { source, sourceType: 'local' },
+    })
+
+    const decoyDir = join(tempDir, 'decoy')
+    await mkdir(decoyDir, { recursive: true })
+    process.chdir(decoyDir)
+
+    const result = await apiCi(workDir)
+
+    assert.equal(result.allPassed, true)
+    assert.ok(
+      existsSync(
+        join(workDir, '.agents', 'skills', 'cwd-mismatch-skill', 'SKILL.md'),
+      ),
+      'skill should install under the requested project cwd, not process.cwd()',
+    )
+  })
 })
