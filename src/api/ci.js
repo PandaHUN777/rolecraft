@@ -44,7 +44,7 @@ export async function apiCi(cwd = process.cwd()) {
       }
 
       const targets = entry.sourceType === 'local' ? ['project'] : ['agents']
-      const results = await installSkill(resolved, targets)
+      const results = await installSkill(resolved, targets, 'copy', cwd)
       installed.push({ slug, source: entry.source, results })
     } catch (err) {
       failed.push({ slug, source: entry.source, reason: err?.message })
