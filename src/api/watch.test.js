@@ -39,13 +39,41 @@ function writeSkill(dir, slug) {
   )
 }
 
-async function waitFor(events, predicate, timeoutMs = 5000) {
+async function waitUntil(predicate, timeoutMs = 5000) {
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
-    if (events.some(predicate)) return true
+    if (predicate()) return true
     await new Promise((r) => setTimeout(r, 50))
   }
-  return events.some(predicate)
+  return predicate()
+}
+
+async function waitFor(events, predicate, timeoutMs = 5000) {
+  return waitUntil(() => events.some(predicate), timeoutMs)
+}
+
+// fs.watch is best-effort: a write can land before the kernel has armed the
+// watch, and that event is then lost for good — no amount of waiting brings it
+// back. Retry the touch until a `syncing` event actually arrives. Waiting on
+// `synced` alone cannot do this, because a permanently missed first event is
+// indistinguishable from a slow sync.
+//
+// Counts `syncing` events rather than testing for presence: an earlier trigger
+// in the same test may have left one in the array, and presence-testing would
+// short-circuit on it before the current touch has been delivered.
+//
+// Returns once the watcher has woken; the caller still waits for `synced`,
+// because `synced` only lands ~WATCH_DEBOUNCE_MS after `syncing`.
+async function triggerAndWait(events, touch, opts = {}) {
+  const attempts = opts.attempts || 5
+  const stepMs = opts.stepMs || 400
+  const syncingCount = () => events.filter((e) => e.type === 'syncing').length
+  for (let i = 1; i <= attempts; i++) {
+    const before = syncingCount()
+    await touch(i)
+    if (await waitUntil(() => syncingCount() > before, stepMs)) return true
+  }
+  return false
 }
 
 async function rmRetry(path, maxRetries = 5) {
@@ -211,8 +239,14 @@ describe('watchApi', () => {
     })
 
     try {
-      await writeFile(join(tempDir, 'source-local', 'CHANGE.md'), 'change')
-      await waitFor(events, (e) => e.type === 'synced')
+      const fired = await triggerAndWait(events, (n) =>
+        writeFile(join(tempDir, 'source-local', 'CHANGE.md'), `change ${n}`),
+      )
+      assert.ok(fired, 'watcher never woke up after 5 touches')
+      assert.ok(
+        await waitFor(events, (e) => e.type === 'synced'),
+        'watcher woke up but the sync never completed',
+      )
     } finally {
       result.close()
     }
@@ -249,8 +283,14 @@ describe('watchApi', () => {
       })
 
       try {
-        await writeFile(join(dir, 'CHANGE.md'), 'external change')
-        await waitFor(events, (e) => e.type === 'synced')
+        const fired = await triggerAndWait(events, (n) =>
+          writeFile(join(dir, 'CHANGE.md'), `change ${n}`),
+        )
+        assert.ok(fired, 'watcher never woke up after 5 touches')
+        assert.ok(
+          await waitFor(events, (e) => e.type === 'synced'),
+          'watcher woke up but the sync never completed',
+        )
         await new Promise((r) => setTimeout(r, 800))
       } finally {
         result.close()
@@ -307,8 +347,14 @@ describe('watchApi', () => {
       )
 
       try {
-        await writeFile(join(projectDir, 'CHANGE.md'), 'external change')
-        await waitFor(events, (e) => e.type === 'synced')
+        const fired = await triggerAndWait(events, (n) =>
+          writeFile(join(projectDir, 'CHANGE.md'), `change ${n}`),
+        )
+        assert.ok(fired, 'watcher never woke up after 5 touches')
+        assert.ok(
+          await waitFor(events, (e) => e.type === 'synced'),
+          'watcher woke up but the sync never completed',
+        )
         await new Promise((r) => setTimeout(r, 800))
       } finally {
         result.close()
@@ -341,8 +387,14 @@ describe('watchApi', () => {
 
       try {
         await rm(join(dir, 'broken-source', 'SKILL.md'), { force: true })
-        await writeFile(join(dir, 'broken-source', 'OTHER.md'), 'change')
-        await waitFor(events, (e) => e.type === 'synced')
+        const fired = await triggerAndWait(events, (n) =>
+          writeFile(join(dir, 'broken-source', 'OTHER.md'), `change ${n}`),
+        )
+        assert.ok(fired, 'watcher never woke up after 5 touches')
+        assert.ok(
+          await waitFor(events, (e) => e.type === 'synced'),
+          'watcher woke up but the sync never completed',
+        )
       } finally {
         result.close()
       }
@@ -431,8 +483,14 @@ describe('watchApi', () => {
     )
 
     try {
-      await writeFile(join(sourceDir, 'CHANGE.md'), 'change')
-      await waitFor(events, (e) => e.type === 'synced')
+      const fired = await triggerAndWait(events, (n) =>
+        writeFile(join(sourceDir, 'CHANGE.md'), `change ${n}`),
+      )
+      assert.ok(fired, 'watcher never woke up after 5 touches')
+      assert.ok(
+        await waitFor(events, (e) => e.type === 'synced'),
+        'watcher woke up but the sync never completed',
+      )
     } finally {
       result.close()
     }
