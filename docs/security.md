@@ -26,6 +26,14 @@ Minimum score is 0. Each unique pattern match across all files counts once per c
 | MEDIUM (×3) | Shell commands, env access, network requests, privilege escalation | `execSync`, `process.env`, `fetch()`, `sudo` |
 | LOW (×1) | Missing metadata, source type | No owner, no description, npm/git source |
 
+### Download-and-execute
+
+A `curl` or `wget` download piped (or chained with `;`) into `sh`, `bash`, `zsh` or `python` is a critical finding in both skill and MCP server scans. Flags before or after the URL do not change that (`curl -fsSL <url> | sh`, `wget -qO- <url> | sh`, `curl --proto '=https' -sSf <url> | sh`), and neither does running the interpreter through `sudo` or an absolute path (`| sudo -E bash`, `| /bin/sh`).
+
+Install one-liners in a skill's files count as well, so a skill whose `SKILL.md` tells the agent to run `curl -fsSL https://example.com/install.sh | bash` is blocked unless you pass `--yes`.
+
+Piping a download into a tool that only reads it is not flagged: `| jq`, `| shasum -a 256`, or Python given a module that only formats it (`| python3 -m json.tool`). Everything else given to Python counts, including `| python3 -`, `| python3 -c "..."`, and any other module — a `-c` program cannot be told apart from one that only parses data, so it is flagged and you are asked. That is deliberate: an earlier version tried to spot an execution by name and let `os.execv`, `os.popen`, `ctypes` and others through while reading as data-only.
+
 ## Example Scenarios
 
 ### 1. Clean skill — `user/code-review`
